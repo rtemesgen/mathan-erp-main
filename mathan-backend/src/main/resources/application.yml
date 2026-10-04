@@ -1,0 +1,26 @@
+spring:
+  application.name: mathan-backend
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate.ddl-auto: validate
+  jackson:
+    default-property-inclusion: non_null
+  flyway.enabled: true
+server:
+  port: ${PORT:8080}
+  error.include-message: never
+management.endpoints.web.exposure.include: health,info
+springdoc.swagger-ui.path: /swagger-ui.html
+mathan:
+  jwt-secret: ${MATHAN_JWT_SECRET}
+  access-minutes: 15
+  refresh-days: 14
+  cookie-secure: ${MATHAN_COOKIE_SECURE}
+  allowed-origins: ${MATHAN_ALLOWED_ORIGINS:http://localhost:*}
+  bootstrap:
+    username: ${MATHAN_BOOTSTRAP_USERNAME}
+    pin: ${MATHAN_BOOTSTRAP_PIN}

@@ -1,0 +1,102 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-brand-olive: #5b633d;
+  --color-brand-beige: #f5f5f0;
+}
+
+@layer base {
+  body {
+    @apply bg-brand-beige text-zinc-900 antialiased;
+  }
+}
+
+/* Professional Audit Print Layout Overrides */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 15mm 15mm 15mm 15mm;
+  }
+
+  body {
+    background-color: white !important;
+    color: black !important;
+    font-size: 11pt !important;
+  }
+
+  /* Hide navigation, buttons, select menus, scrollbars, and footers */
+  aside,
+  header,
+  button,
+  select,
+  .no-print,
+  .print-hidden,
+  .suggestions-sidebar {
+    display: none !important;
+  }
+
+  /* Expand the main content to occupy full width and flow naturally */
+  main,
+  .print-full-width,
+  .flex-1 {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+    position: static !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Remove card stylings, rounding, shadows and borders for a clean layout */
+  .print-card,
+  .bg-white {
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+  }
+
+  /* Force table layouts and prevent weird row splits across pages */
+  table {
+    page-break-inside: auto;
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tfoot {
+    display: table-footer-group;
+  }
+
+  /* Ensure text colors are high-contrast black for print ink */
+  .text-zinc-900, .text-zinc-800, .text-zinc-700 {
+    color: #000000 !important;
+  }
+  .text-zinc-400, .text-zinc-500 {
+    color: #555555 !important;
+  }
+  .bg-zinc-50, .bg-zinc-100 {
+    background-color: #f3f4f6 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+
+

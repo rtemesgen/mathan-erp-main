@@ -1,0 +1,6 @@
+{
+  "name": "Mathan ERP",
+  "description": "A comprehensive accounting and inventory management system with role-based access, period controls, and detailed reporting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["accounting", "inventory-management", "reporting"]
+}

@@ -1,0 +1,28 @@
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+
+# Frontend dependencies and build output
+mathan-frontend/node_modules/
+mathan-frontend/dist/
+mathan-frontend/coverage/
+
+# Backend build output
+mathan-backend/target/
+
+# Browser/test reports
+.playwright-mcp/
+mathan-frontend/playwright-report/
+mathan-frontend/test-results/
+
+# IDE and operating-system files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Logs and temporary files
+*.log
+*.tmp
