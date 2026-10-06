@@ -1,74 +1,44 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useRef, useState } from 'react';
 import { Business, Currency } from '../types';
-import { doc, onSnapshot } from '../lib/restStore';
-import { db } from '../lib/data';
-import { useUI } from '../context/UIContext';
+import { apiWithoutStoredBusinessHeader } from '../lib/api';
+import { createBusinessContextController, OpenBusinessResult } from '../lib/businessContext';
 
 interface BusinessContextType {
   business: Business | null;
   currency: Currency | null;
-  setBusinessId: (id: string | null) => void;
+  openBusiness: (id: string) => Promise<OpenBusinessResult>;
+  clearBusiness: () => void;
   isLoading: boolean;
 }
 
 const BusinessContext = createContext<BusinessContextType | undefined>(undefined);
 
 export function BusinessProvider({ children }: { children: React.ReactNode }) {
-  const { notify } = useUI();
   const browserStorage = typeof localStorage === 'undefined' ? null : localStorage;
-  const [businessId, setBusinessId] = useState<string | null>(browserStorage?.getItem('currentBusinessId') || null);
   const [business, setBusiness] = useState<Business | null>(null);
   const [currency, setCurrency] = useState<Currency | null>(null);
-  const [isLoading, setIsLoading] = useState(!!businessId);
+  const [isLoading, setIsLoading] = useState(!!browserStorage?.getItem('currentBusinessId'));
+  const controllerRef = useRef<ReturnType<typeof createBusinessContextController> | null>(null);
 
-  useEffect(() => {
-    if (!businessId) {
-      setBusiness(null);
-      setCurrency(null);
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    setBusiness(null);
-    setCurrency(null);
-    let unsubCurrency: (() => void) | undefined;
-    const unsubBusiness = onSnapshot(doc(db, 'businesses', businessId), (snap) => {
-      if (snap.exists()) {
-        const bData = { id: snap.id, ...snap.data() } as Business;
-        setBusiness(bData);
-        
-        // Listen to currency changes too
-        unsubCurrency?.();
-        if (!bData.baseCurrencyId) { setIsLoading(false); return; }
-        unsubCurrency = onSnapshot(doc(db, 'currencies', bData.baseCurrencyId), (cSnap) => {
-          if (cSnap.exists()) {
-            setCurrency({ id: cSnap.id, ...cSnap.data() } as Currency);
-          }
-          setIsLoading(false);
-        });
-      } else {
-        setBusinessId(null);
-        browserStorage?.removeItem('currentBusinessId');
-        setIsLoading(false);
-      }
-    }, (err) => {
-      console.error('Fetch business failed:', err);
-      notify.error('Unable to load the selected business');
-      setIsLoading(false);
+  if (!controllerRef.current) {
+    controllerRef.current = createBusinessContextController({
+      listBusinesses: () => apiWithoutStoredBusinessHeader<Business[]>('/businesses'),
+      storage: browserStorage ?? { setItem() {}, removeItem() {} },
+      setBusiness,
+      setCurrency,
+      setLoading: setIsLoading,
     });
-
-    return () => { unsubCurrency?.(); unsubBusiness(); };
-  }, [businessId]);
-
-  const handleSetBusinessId = (id: string | null) => {
-    setBusinessId(id);
-    if (id) browserStorage?.setItem('currentBusinessId', id);
-    else browserStorage?.removeItem('currentBusinessId');
-  };
+  }
+  const controller = controllerRef.current;
 
   return (
-    <BusinessContext.Provider value={{ business, currency, setBusinessId: handleSetBusinessId, isLoading }}>
+    <BusinessContext.Provider value={{
+      business,
+      currency,
+      openBusiness: controller.openBusiness,
+      clearBusiness: controller.clearBusiness,
+      isLoading,
+    }}>
       {children}
     </BusinessContext.Provider>
   );

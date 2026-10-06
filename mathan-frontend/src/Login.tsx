@@ -3,6 +3,7 @@ import { useAuth } from './hooks/useAuth';
 import { Loader2, ShieldCheck } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useUI } from './context/UIContext';
+import { ApiError, getApiErrorMessage } from './lib/api';
 
 export default function Login() {
   const [username, setUsername] = useState('admin');
@@ -28,8 +29,9 @@ export default function Login() {
       }
     } catch (err) {
       console.error('Login error:', err);
-      setError('Connection failed.');
-      notify.error('Network Error');
+      const message = err instanceof ApiError ? getApiErrorMessage(err, 'Unable to sign in.') : 'Connection failed. Please try again.';
+      setError(message);
+      notify.error(message);
     } finally {
       setIsLoggingIn(false);
       setGlobalLoading(false);

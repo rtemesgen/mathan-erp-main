@@ -11,6 +11,7 @@ import {
   LogOut, 
   LayoutDashboard,
   Box,
+  Building2,
   Wallet,
   CalendarDays,
   Menu,
@@ -33,7 +34,7 @@ const Settings = React.lazy(() => import('./Settings'));
 
 type View = 'overview' | 'masters' | 'transactions' | 'reports' | 'audit' | 'users' | 'settings';
 
-export default function Dashboard({ onLogout }: { onLogout?: () => Promise<void> }) {
+export default function Dashboard({ onLogout, onSwitchBusiness }: { onLogout?: () => Promise<void>; onSwitchBusiness?: () => void }) {
   const { actor, logout } = useAuth();
   const [activeView, setActiveView] = useState<View>('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -148,6 +149,10 @@ export default function Dashboard({ onLogout }: { onLogout?: () => Promise<void>
         </nav>
 
         <div className="p-2 border-t border-zinc-100 space-y-1.5 pointer-events-auto">
+          {onSwitchBusiness && <button onClick={onSwitchBusiness} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-zinc-400 hover:bg-zinc-50 hover:text-zinc-900 transition-colors" title="Switch business">
+            <Building2 className="w-3 h-3" />
+            <span className="font-bold text-[8px] uppercase tracking-widest">Switch business</span>
+          </button>}
           <div className="flex items-center gap-1.5">
             <div className="w-6 h-6 bg-zinc-100 rounded-full flex items-center justify-center text-[8px] font-black text-zinc-400 uppercase grow-0 shrink-0 border-2 border-white shadow-inner">
               {actor?.name.charAt(0)}
@@ -183,6 +188,16 @@ export default function Dashboard({ onLogout }: { onLogout?: () => Promise<void>
           </div>
           
           <div className="flex items-center gap-2">
+            {onSwitchBusiness && <button
+              type="button"
+              onClick={onSwitchBusiness}
+              className="flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-zinc-700 shadow-sm transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-950"
+              aria-label="Change company"
+              title="Change company"
+            >
+              <Building2 className="h-3 w-3" />
+              <span className="text-[7px] font-black uppercase tracking-widest sm:text-[8px]">Change company</span>
+            </button>}
             <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-zinc-50 text-[7px] text-zinc-400 rounded-full font-black uppercase tracking-[0.2em] border border-zinc-100">
               <span className="w-1 h-1 bg-zinc-950 rounded-full animate-pulse" />
               Live

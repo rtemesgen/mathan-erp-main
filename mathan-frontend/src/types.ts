@@ -35,6 +35,7 @@ export interface Business {
   baseCurrencyId: string;
   ownerId: string;
   baseCurrencyCode?: string;
+  baseCurrency?: Currency | null;
   allowNegativeInventory?: boolean;
 }
 

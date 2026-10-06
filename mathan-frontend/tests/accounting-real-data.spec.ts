@@ -23,6 +23,12 @@ async function createMaster(ctx: APIRequestContext, type: string, body: any, hea
   return response.json() as Promise<Master>;
 }
 
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
 test('realistic multi-master, inventory, multi-currency and report integrity flow', async ({ browser, baseURL }) => {
   const username = localEnv('MATHAN_BOOTSTRAP_USERNAME', 'admin');
   const pin = localEnv('MATHAN_BOOTSTRAP_PIN', '1234');
@@ -32,6 +38,7 @@ test('realistic multi-master, inventory, multi-currency and report integrity flo
   const auth = { Authorization: `Bearer ${token}` };
 
   const business = await post(api, '/api/v1/businesses', { name: `Mathan Real-Data Trading Ltd ${Date.now()}`, baseCurrencyCode: 'USD' }, auth);
+  const secondBusiness = await post(api, '/api/v1/businesses', { name: `Mathan Second Trading Ltd ${Date.now()}`, baseCurrencyCode: 'UGX' }, auth);
   const headers = { ...auth, 'X-Business-Id': business.id };
   const get = async (type: string) => (await api.get(`/api/v1/masters/${type}`, { headers })).json();
   const seed = async (type: string, body: any) => createMaster(api, type, body, headers);
@@ -118,7 +125,44 @@ test('realistic multi-master, inventory, multi-currency and report integrity flo
   await page.locator('input[autocomplete="current-password"]').fill(pin);
   await page.getByRole('button', { name: 'Unlock Terminal' }).click();
   await expect(page.getByText(business.name)).toBeVisible({ timeout: 30_000 });
+
+  let nextOpenGate: { arrived: ReturnType<typeof deferred>; release: ReturnType<typeof deferred> } | null = null;
+  await page.route('**/api/v1/businesses', async (route) => {
+    const gate = nextOpenGate;
+    if (gate) {
+      nextOpenGate = null;
+      gate.arrived.resolve();
+      await gate.release.promise;
+    }
+    await route.continue();
+  });
+  const holdNextOpen = () => {
+    const gate = { arrived: deferred(), release: deferred() };
+    nextOpenGate = gate;
+    return gate;
+  };
+
+  const firstOpen = holdNextOpen();
   await page.getByText(business.name).click();
+  await firstOpen.arrived.promise;
+  await expect(page.locator('svg.animate-spin')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Active Entities' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Switch business/i })).toHaveCount(0);
+  firstOpen.release.resolve();
+  await expect(page.getByRole('button', { name: /Switch business/i })).toBeVisible({ timeout: 30_000 });
+
+  await page.getByRole('button', { name: 'Change company' }).click();
+  await expect(page.getByRole('heading', { name: 'Active Entities' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(secondBusiness.name)).toBeVisible();
+  const secondOpen = holdNextOpen();
+  await page.getByText(secondBusiness.name).click();
+  await secondOpen.arrived.promise;
+  await expect(page.locator('svg.animate-spin')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Active Entities' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Switch business/i })).toHaveCount(0);
+  secondOpen.release.resolve();
+  await expect(page.getByRole('button', { name: /Switch business/i })).toBeVisible({ timeout: 30_000 });
+
   await page.getByText('Masters', { exact: true }).click();
   await expect(page.getByText('Master Foundations')).toBeVisible({ timeout: 30_000 });
   await page.getByRole('button', { name: 'Products' }).click();
@@ -157,4 +201,92 @@ test('realistic multi-master, inventory, multi-currency and report integrity flo
   await page.screenshot({ path: 'test-results/real-data-masters.png', fullPage: true });
   await page.close();
   await api.dispose();
+});
+
+test('business selector shows Retry after a failed business list request', async ({ page }) => {
+  const username = localEnv('MATHAN_BOOTSTRAP_USERNAME', 'admin');
+  const pin = localEnv('MATHAN_BOOTSTRAP_PIN', '1234');
+  const api = await request.newContext({ baseURL: process.env.BASE_URL || 'http://localhost:3000' });
+  const login = await post(api, '/api/v1/auth/login', { username, pin });
+  const business = await post(api, '/api/v1/businesses', {
+    name: `Mathan Retry Fixture ${Date.now()}`,
+    baseCurrencyCode: 'USD',
+  }, { Authorization: `Bearer ${login.accessToken}` });
+  let failedFirstListRequest = false;
+
+  await page.route('**/api/v1/businesses', async (route) => {
+    if (!failedFirstListRequest && route.request().method() === 'GET') {
+      failedFirstListRequest = true;
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 503, code: 'SERVICE_UNAVAILABLE', message: 'Business list temporarily unavailable' }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto('/');
+  await page.locator('input[autocomplete="username"]').fill(username);
+  await page.locator('input[autocomplete="current-password"]').fill(pin);
+  await page.getByRole('button', { name: 'Unlock Terminal' }).click();
+
+  await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('No business profiles yet')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Active Entities' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0);
+  await expect(page.getByText(business.name)).toBeVisible();
+  await api.dispose();
+});
+
+test('created business stays in selector after open failure and retries without creating again', async ({ page }) => {
+  const username = localEnv('MATHAN_BOOTSTRAP_USERNAME', 'admin');
+  const pin = localEnv('MATHAN_BOOTSTRAP_PIN', '1234');
+  const businessName = `Mathan Create Recovery ${Date.now()}`;
+  let createPostCount = 0;
+  let failedImmediateOpen = false;
+
+  await page.route('**/api/v1/businesses', async (route) => {
+    const request = route.request();
+    if (request.method() === 'POST') {
+      createPostCount += 1;
+      await route.continue();
+      return;
+    }
+
+    if (request.method() === 'GET' && createPostCount > 0 && !failedImmediateOpen) {
+      failedImmediateOpen = true;
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 503, code: 'SERVICE_UNAVAILABLE', message: 'Business context temporarily unavailable' }),
+      });
+      return;
+    }
+
+    await route.continue();
+  });
+
+  await page.goto('/');
+  await page.locator('input[autocomplete="username"]').fill(username);
+  await page.locator('input[autocomplete="current-password"]').fill(pin);
+  await page.getByRole('button', { name: 'Unlock Terminal' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Active Entities' })).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'New Business Profile' }).click();
+  await page.getByPlaceholder('e.g. Jolly Trading Co.').fill(businessName);
+  await page.getByRole('button', { name: 'Confirm Incorporation' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Active Entities' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Establish Business')).toHaveCount(0);
+  await expect(page.getByText(businessName, { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Retry opening' })).toBeVisible();
+  expect(failedImmediateOpen).toBe(true);
+  expect(createPostCount).toBe(1);
+
+  await page.getByRole('button', { name: 'Retry opening' }).click();
+  await expect(page.getByRole('button', { name: /Switch business/i })).toBeVisible({ timeout: 30_000 });
+  expect(createPostCount).toBe(1);
 });
